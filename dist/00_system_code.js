@@ -1,4 +1,14 @@
 "use strict";
+function onOpen() {
+    const ui = SpreadsheetApp.getUi();
+    ui.createMenu("カスタムメニュー")
+        .addItem("シフト調整", "generate_shifttable_time")
+        .addItem("シフト調整(表示用)", "generate_shifttable_person")
+        .addItem("シフト希望", "generate_requesttable")
+        .addItem("シフト希望フォーム", "showsidebar")
+        .addToUi();
+}
+;
 function doGet(e) {
     const page = ((e && e.parameter && e.parameter.page) || "index");
     //if (typeof routes[page] !== "function") {
@@ -34,11 +44,5 @@ function render(page) {
     return template.evaluate()
         .setTitle("：index")
         .addMetaTag("viewport", "width=device-width, initial-scale=1");
-}
-;
-function include(filename, data) {
-    const template = HtmlService.createTemplateFromFile(filename);
-    template.data = data ?? null;
-    return template.evaluate().getContent();
 }
 ;

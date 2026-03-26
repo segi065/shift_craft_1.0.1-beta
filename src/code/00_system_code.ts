@@ -1,3 +1,15 @@
+function onOpen() {
+    const ui = SpreadsheetApp.getUi();
+    
+    ui.createMenu("カスタムメニュー")
+        .addItem("シフト調整", "generate_shifttable_time")
+        .addItem("シフト調整(表示用)", "generate_shifttable_person")
+        .addItem("シフト希望", "generate_requesttable")
+        .addItem("シフト希望フォーム", "showsidebar")
+        .addToUi();
+
+};
+
 function doGet(e: { parameter: { page: any; }; }) {
     type Page = keyof typeof routes;
     const page = ((e && e.parameter && e.parameter.page) || "index") as Page;
@@ -36,11 +48,4 @@ function render(page: string) {
     return template.evaluate()
         .setTitle("：index")
         .addMetaTag("viewport", "width=device-width, initial-scale=1");
-};
-
-function include(filename: string, data?: any | null) {
-    const template = HtmlService.createTemplateFromFile(filename);
-    template.data = data ?? null;
-
-    return template.evaluate().getContent();
 };
