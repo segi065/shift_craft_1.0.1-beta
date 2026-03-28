@@ -1,107 +1,73 @@
 function showsidebar() {
-  const html = HtmlService.createHtmlOutputFromFile('05_sidebar')
-    .setTitle('シフト希望フォーム');
-  SpreadsheetApp.getUi().showSidebar(html);
-};
-
-function onSelectionChange(e:any) {
-    const sheet = e.range.getSheet();
-    if (sheet.getName() !== SHEET_NAMES['shiftrequest']) return;
-
-    const row = e.range.getRow();
-    const col = e.range.getColumn();
-
-    if (row === 1 || col === 1) return;
-
-    const now = new Date().getTime();
-
-    const state = JSON.parse(PropertiesService.getScriptProperties().getProperty("selected_data") || "{}");
-    const lasttime = Number(state.update || "0");
-
-    const name = sheet.getRange(row, 2).getValue();
-
-    let dates: string[] = [];
-    if(col === 2) {
-        for(let i = 3; i <= 9; i++) {
-            dates.push(Utilities.formatDate(new Date(sheet.getRange(2, i).getValue()), "Asia/Tokyo", "yyyy-MM-dd"));
-        };
-    } else if(col >= 3 && col <= 9) {
-        dates.push(Utilities.formatDate(new Date(sheet.getRange(2, col).getValue()), "Asia/Tokyo", "yyyy-MM-dd"));
-    };
-
-    PropertiesService.getScriptProperties().setProperty(
-        "selected_data",
-         JSON.stringify({
-            name: name,
-            dates: dates,
-            update: String(now),
-        })
-    );  
-    
-    if (now - lasttime < 1000) {
-        console.log("ダブルクリック");
-        opensidebar();
-    };
-};
-
-function opensidebar() {
     const html = HtmlService.createHtmlOutputFromFile('05_sidebar')
         .setTitle('シフト希望フォーム');
+    if (!html) {
+        dialog("05_sidebar.htmlが見つかりませんでした。");
+        throw new Error('Sidebar HTML not found');
+    };
     SpreadsheetApp.getUi().showSidebar(html);
 };
 
-function get_selected_data() {
-    console.log(JSON.stringify(PropertiesService.getScriptProperties().getProperty("selected_data")));
-    return PropertiesService.getScriptProperties().getProperty("selected_data");
-}
+function get_namelist() {
+    const names = getsheet('staff').getRange("B3:B"+getsheet('staff').getLastRow()).getValues();
+    if (!names) {
+        dialog("スタッフシートに名前が見つかりませんでした。");
+        throw new Error('No staff names found');
+    };
+    return names.map(row => row[0]);
+};
 
-function search_requests() {
-    const data = getsheet('shiftrequest_form').getRange("B2:E"+getsheet('shiftrequest_form').getLastRow()).getValues();
+function get_request_data(name: string) {
+    const request_data = getsheet('shiftrequest_form').getRange("B2:E"+getsheet('shiftrequest_form').getLastRow()).getValues();
+    const data = request_data.filter(row => row[0] === name);
     data.map(row => {
         row[1] = Utilities.formatDate(new Date(row[1]), "Asia/Tokyo", "yyyy-MM-dd");
         row[2] = Utilities.formatDate(new Date(row[2]), "Asia/Tokyo", "HH:mm");
         row[3] = Utilities.formatDate(new Date(row[3]), "Asia/Tokyo", "HH:mm");
     });
-    return data;
-}
-/*function onSelectionChange(e:any) {
-  const sheet = e.range.getSheet();
-  const range = e.range;
-  const row = e.range.getRow();
-  const col = e.range.getColumn();
 
-  // 対象シート名（必要なら）
-  if (sheet.getName() === SHEET_NAMES['shiftrequest']) edit_request_sidebar(row, col);
+    const request_range_data = getsheet('shiftrequest_form_range').getRange("B2:D"+getsheet('shiftrequest_form_range').getLastRow()).getValues();
+    const range_data = request_range_data.filter(row => row[0] === name);
+    range_data.map(row => {
+        row[1] = String(row[1]);
+        row[2] = String(row[2]);
+    });
 
+    return [data, range_data];
 };
 
-function edit_request_sidebar(row: number, col: number) {
-    const sheet = getsheet('shiftrequest');
-    const name = sheet.getRange(row, 2).getValue();
-    let data = [name];
-    if(col === 2) {
-        for(let i = 3; i <= 9; i++) {
-            data.push(Utilities.formatDate(new Date(sheet.getRange(2, i).getValue()), "Asia/Tokyo", "yyyy-MM-dd"));
-        };
-    } else if(col >= 3 && col <= 9) {
-        data.push(Utilities.formatDate(new Date(sheet.getRange(2, col).getValue()), "Asia/Tokyo", "yyyy-MM-dd"));
+function save_request_data(name: string, data: any[] ,range_data: any[]) {
+    const request_data = getsheet('shiftrequest_form').getRange("A1:E"+getsheet('shiftrequest_form').getLastRow()).getValues();
+    for (let i = request_data.length; i >= 1; i--) {
+        if (request_data[i-1][1] === name) {
+            getsheet('shiftrequest_form').deleteRow(i);
+        }
     };
-  
-    PropertiesService.getScriptProperties().setProperty(
-        "request_data",
-        JSON.stringify(data)
-    );
-    console.log(JSON.stringify(data));
+    data.forEach(row => {
+        const last_row = getsheet('shiftrequest_form').getLastRow();
+            getsheet('shiftrequest_form').getRange(last_row + 1, 2, 1, 4).setValues([[ name, Utilities.formatDate(new Date(row[1]), "Asia/Tokyo", "MM/dd"), row[2], row[3] ]]);
+            getsheet('shiftrequest_form').getRange(last_row + 1, 2, 1, 4).setFontSize(12);
+            getsheet('shiftrequest_form').getRange(last_row + 1, 2, 1, 4).setBorder(true, true, true, true, true, true);
+            getsheet('shiftrequest_form').getRange(last_row + 1, 2, 1, 4).setHorizontalAlignment("center");
+            getsheet('shiftrequest_form').getRange(last_row + 1, 2, 1, 4).setVerticalAlignment("middle");
+            getsheet('shiftrequest_form').getRange(last_row + 1, 2).setBackground("#f1f8e9");
+    });
+
+    const request_range_data = getsheet('shiftrequest_form_range').getRange("A1:D"+getsheet('shiftrequest_form_range').getLastRow()).getValues();
+    for (let i = request_range_data.length; i >= 1; i--) {
+        if (request_range_data[i-1][1] === name) {
+            getsheet('shiftrequest_form_range').deleteRow(i);
+        }
+    };
+    const last_row = getsheet('shiftrequest_form_range').getLastRow();
+        getsheet('shiftrequest_form_range').getRange(last_row + 1, 2, 1, 3).setValues([[ range_data[0], range_data[1], range_data[2]]]);
+        getsheet('shiftrequest_form_range').getRange(last_row + 1, 2, 1, 3).setFontSize(12);
+        getsheet('shiftrequest_form_range').getRange(last_row + 1, 2, 1, 3).setBorder(true, true, true, true, true, true);
+        getsheet('shiftrequest_form_range').getRange(last_row + 1, 2, 1, 3).setHorizontalAlignment("center");
+        getsheet('shiftrequest_form_range').getRange(last_row + 1, 2, 1, 3).setVerticalAlignment("middle");
+        getsheet('shiftrequest_form_range').getRange(last_row + 1, 2).setBackground("#f1f8e9");
+
+    generate_requesttable();
+    SpreadsheetApp.flush();
+    dialog("保存しました");
 };
-
-function getData() {
-  const json = PropertiesService.getScriptProperties().getProperty("request_data");
-  console.log(JSON.stringify(json));
-  return json ? JSON.parse(json) : ["", []];
-}
-
-function saveData(name: string, dates: string[]) {
-  const data = [name, dates];
-  PropertiesService.getScriptProperties()
-    .setProperty("state", JSON.stringify(data));
-}*/

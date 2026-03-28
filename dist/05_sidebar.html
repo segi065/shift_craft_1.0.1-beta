@@ -7,95 +7,106 @@
 
     <body>
 
-        <div id="name" class="mb-2 text-bold"></div>
-        <div id="dates" class="mb-2"></div>
+        <div id="name" class="text-bold m-2">
+            <select class="form-select-sm fs-6" id="namelist" onchange="load()">
+                <option value="" disabled selected>名前を選択してください</option>
+            </select>
+        </div>
+        <div id="dates"></div>
 
-        <button class="btn btn-primary w-100 mt-3" onclick="save()">保存</button>
+        <div id="range"></div>
 
         <template id="date-template">
-            <div class="date_block mb-1 ms-2">
+            <div class="date_block m-2">
                 <div class="date"></div>
-                <div class="m-1 ms-2 times"></div>
+                <div class="times"></div>
 
-                <button class="btn btn-sm btn-secondary ms-2 add_time">＋追加</button>
+                <button class="btn btn-sm btn-primary mt-1 add_time">＋追加</button>
             </div>
 
         </template>
 
         <template id="time-template">
-            <div class="d-flex align-items-center gap-2 ms-2">
-                <input class="form-control w-auto start" type="time">-<input class="form-control w-auto end" type="time">
+            <div class="d-flex align-items-center gap-1 mt-1 mb-1 time_block">
+                <input class="form-control w-auto start" type="time" step="3600">
+                <span>-</span>
+                <input class="form-control w-auto end" type="time">
+                <button class="btn btn-sm btn-danger remove_time">削除</button>
             </div>
         </template>
 
+        <template id="range-template">
+            <div class="d-flex align-items-center gap-2 m-2">
+                <div>
+                    <label>最低勤務時間</label>
+                    <input class="form-control min" type="text" style="width: 8em;">
+               
+                </div>
+                <div>
+                    <label>最大勤務時間</label>
+                    <input class="form-control max" type="text" style="width: 8em;">
+
+                </div>
+            </div>
+            
+            <button class="btn btn-primary ms-2 mb-2" onclick="save()">保存</button>
+        </template>
 
         <script>
             let lastupdate = 0;
-
-            setInterval(load, 5000);
+            google.script.run.withSuccessHandler(data => {
+                const namelist = document.getElementById("namelist");
+                data.forEach(name => {
+                    const option = document.createElement("option");
+                    option.value = name;
+                    option.innerText = name;
+                    namelist.appendChild(option);
+                });
+            }).get_namelist();
 
             function load() {
-                google.script.run.withSuccessHandler(data => {
-                if (!data) return;
+                const name = document.getElementById("namelist").value;
+                document.getElementById("dates").innerHTML = "";
+                document.getElementById("range").innerHTML = "";
+                google.script.run.withSuccessHandler(function([data, range_data]) {
+                    console.log(data);
+                    console.log(range_data);
 
-                const parsedData = JSON.parse(data);
+                    google.script.run.withSuccessHandler(dates => {
 
-                if(parsedData.update !== lastupdate) {
-                    lastupdate = parsedData.update;
-                    document.getElementById("name").innerText = parsedData.name;
-                    document.getElementById("dates").replaceChildren();
+                        dates.forEach(date => {
+                            const date_template = document.getElementById("date-template");
+                            const date_clone = date_template.content.cloneNode(true);
 
-                    console.log(parsedData.dates);
-                    parsedData.dates.forEach(date => {
-                        const date_template = document.getElementById("date-template");
-                        const date_clone = date_template.content.cloneNode(true);
+                            date_clone.querySelector(".date").innerText = date;
+                            const times = date_clone.querySelector(".times");
 
-                        const date_element = date_clone.firstElementChild;
-                        date_element.querySelector(".date").innerText = date;
+                            data.forEach(request => {
+                                if(request[1].trim() !== date.trim()) return;
 
-                        const times_container = date_element.querySelector(".times");
-                        search_requests(parsedData.name, date, (times) => {
-                            console.log("date loop");
-                            times.forEach(time => {
-                                console.log("time loop");
                                 const time_template = document.getElementById("time-template");
                                 const time_clone = time_template.content.cloneNode(true);
 
-                                time_clone.querySelector(".start").value = time[0];
-                                time_clone.querySelector(".end").value = time[1];
-                                times_container.appendChild(time_clone);
+                                time_clone.querySelector(".time_block .start").value = request[2];
+                                time_clone.querySelector(".time_block .end").value = request[3];
+                                times.appendChild(time_clone);
                             });
+                            
+                            document.getElementById("dates").appendChild(date_clone);
                         });
 
-                        document.getElementById("dates").appendChild(date_clone);
-                    });
-                };
-                }).get_selected_data();
+                        const range_template = document.getElementById("range-template");
+                        const range_clone = range_template.content.cloneNode(true);
+                        if(range_data.length > 0) {
+                            range_clone.querySelector(".min").value = range_data[0][1];
+                            range_clone.querySelector(".max").value = range_data[0][2];
+                        };
+                        document.getElementById("range").appendChild(range_clone);
+                    })
+                    .getdates();
+
+                }).get_request_data(name);
             };
-
-            function search_requests(name, date, callback) {
-                google.script.run.withSuccessHandler(data => {
-                    const search = [];
-
-                    data.forEach(request => {
-                        if(request[0].trim() !== name.trim()) return;
-                        if(request[1].trim() !== date.trim()) return;
-                        search.push([
-                            request[2],
-                            request[3]
-                        ]);
-                    });
-                    callback(search);
-                }).search_requests();
-            };
-
-            function submit() {
-                const start = document.getElementById("start").value;
-                const end = document.getElementById("end").value;
-
-                google.script.run.saveShift(start, end);
-            };
-
 
             document.addEventListener("click", function(e){
                 if(e.target.classList.contains("add_time")) {
@@ -106,6 +117,37 @@
                     el.appendChild(clone);
                 }
             });
+
+            document.addEventListener("click", function(e){
+                if(e.target.classList.contains("remove_time")) {
+                    const el = e.target.closest(".time_block");
+                    el.remove();
+                }
+            });
+
+            function save() {
+                const name = document.getElementById("namelist").value;
+                const dates = document.querySelectorAll(".date_block");
+
+                const data = [];
+                dates.forEach(date => {
+                    const date_text = date.querySelector(".date").innerText;
+                    const times = date.querySelectorAll(".times .d-flex");
+                    times.forEach(time => {
+                        const start = time.querySelector(".start").value;
+                        const end = time.querySelector(".end").value;
+                        if(start && end) {
+                            data.push([name, date_text, start, end]);
+                        }
+                    });
+                });
+
+                const min = document.querySelector(".min").value;
+                const max = document.querySelector(".max").value;
+                const range_data = [name, min, max];
+
+                google.script.run.save_request_data(name, data, range_data);
+            };
         </script>
     </body>
 </html>
